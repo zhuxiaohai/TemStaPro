@@ -1,3 +1,8 @@
 ProtTrans/
 __pycache__/
 update_tests.sh
+*.tsv
+.idea/
+*.ipynb
+.pytest_cache/
+
