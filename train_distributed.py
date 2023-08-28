@@ -1,5 +1,4 @@
 # coding: utf-8
-import argparse
 import numpy as np
 import random
 import pickle
@@ -10,13 +9,12 @@ import sys
 import os
 
 import torch
-from torch.utils.data import DataLoader
+import torch.distributed as dist
 
 from dataset import TemStaProData
 import runner
 import utils
 import models
-import prottrans_models
 from prottrans_models import get_tokenizer
 
 
@@ -118,6 +116,11 @@ parser.add_option("--version", "-v", dest="version",
     default=False, action="store_true",
     help="print version of the program and exit.")
 
+parser.add_option("--local_rank", type=int, default=0,
+                    help='this value is automatically added by distributed.launch.py')
+
+parser.add_option("--local_world_size", type=int, default=2)
+
 (options, args) = parser.parse_args()
 
 if(options.version):
@@ -158,26 +161,67 @@ else:
     tokenizer.save_pretrained(options.pt_dir)
 
 
-if __name__ == '__main__':
-    with open(options.config_path, 'r') as f:
-        config = yaml.safe_load(f)
-    config = EasyDict(config)
+def worker(local_rank, local_world_size, config):
+    # setup devices for this process. For example:
+    # local_world_size = 2, num_gpus = 8,
+    # process rank 0 uses GPUs [0, 1, 2, 3] and
+    # process rank 1 uses GPUs [4, 5, 6, 7].
+    n = torch.cuda.device_count() // local_world_size  # the number of devices this process can operate
+    device_ids = list(range(local_rank * n, (local_rank + 1) * n))  # corresponding device ids
 
-    if config.train.save and config.train.save_path is not None:
-        if not os.path.exists(config.train.save_path):
-            os.makedirs(config.train.save_path)
+    print(
+        f"[{os.getpid()}] rank = {dist.get_rank()}, local_rank = {local_rank}, "
+        + f"world_size = {dist.get_world_size()}, local_world_size = {local_world_size}, devices_num = {n}, device_ids = {device_ids}"
+    )
 
-    # check device
-    gpus = list(filter(lambda x: x is not None, config.train.gpus))
-    assert torch.cuda.device_count() >= len(gpus), 'do you set the gpus in config correctly?'
-    device = torch.device(gpus[0]) if len(gpus) > 0 else torch.device('cpu')
-    print("Let's use", len(gpus), "GPUs!")
-    print("Using device %s as main device" % device)
-    config.train.device = device
-    config.train.gpus = gpus
+    load_path = os.path.join(config.data.base_path, '%s_processed' % config.data.dataset)
+    print('loading data from %s' % load_path)
 
-    print(config)
+    train_data = []
+    val_data = []
+    test_data = []
 
+    if config.data.train_set is not None:
+        with open(os.path.join(load_path, config.data.train_set), "rb") as fin:
+            train_data = pickle.load(fin)
+    if config.data.val_set is not None:
+        with open(os.path.join(load_path, config.data.val_set), "rb") as fin:
+            val_data = pickle.load(fin)
+    print('train size : %d  ||  val size: %d  ||  test size: %d ' % (len(train_data), len(val_data), len(test_data)))
+    print('loading data done!')
+
+    train_data = TemStaProData(config.train.data_path, options.pt_dir, PARAMETERS['PT_MODEL_PATH'])
+    val_data = TemStaProData(config.test.data_path, options.pt_dir, PARAMETERS['PT_MODEL_PATH'])
+
+    model = models.TemStaProModel(PARAMETERS, options)
+
+    optimizer = utils.get_optimizer(config.train.optimizer, model)
+    scheduler = utils.get_scheduler(config.train.scheduler, optimizer)
+
+    solver = runner.DefaultRunner(train_data, val_data, test_data, model, optimizer, scheduler, device_ids, config, True)
+    if config.train.resume_train:
+        # Use a barrier() to make sure that process 1 loads the model after process
+        # 0 saves it.
+        dist.barrier()
+        # configure map_location properly
+        map_location = {'cuda:%d' % 0: 'cuda:%d' % device_ids[0]}
+        solver.load(config.train.resume_checkpoint, epoch=config.train.resume_epoch, load_optimizer=True,
+                    load_scheduler=True, map_location=map_location)
+    solver.train()
+
+
+def spmd_main(local_world_size, local_rank, config):
+    # These are the parameters used to initialize the process group
+    env_dict = {
+        key: os.environ[key]
+        for key in ("MASTER_ADDR", "MASTER_PORT", "RANK", "WORLD_SIZE")
+    }
+    print(f"[{os.getpid()}] Initializing process group with: {env_dict}")
+    dist.init_process_group(backend="nccl")
+    print(
+        f"[{os.getpid()}] world_size = {dist.get_world_size()}, "
+        + f"rank = {dist.get_rank()}, local_rank = {local_rank}, backend={dist.get_backend()}"
+    )
     # set random seed
     np.random.seed(config.train.seed)
     random.seed(config.train.seed)
@@ -187,20 +231,18 @@ if __name__ == '__main__':
         torch.cuda.manual_seed_all(config.train.seed)
     torch.backends.cudnn.benchmark = True
     print('set seed for random, numpy and torch')
+    worker(local_rank, local_world_size, config)
 
-    train_data = TemStaProData(config.train.data_path, options.pt_dir, PARAMETERS['PT_MODEL_PATH'])
-    val_data = TemStaProData(config.test.data_path, options.pt_dir, PARAMETERS['PT_MODEL_PATH'])
-    print('train size : %d  ||  val size: %d ' % (len(train_data), len(val_data)))
-    print('loading data done!')
 
-    model = models.TemStaProModel(PARAMETERS, options)
-    optimizer = utils.get_optimizer(config.train.optimizer, model)
-    scheduler = utils.get_scheduler(config.train.scheduler, optimizer)
+if __name__ == '__main__':
+    with open(options.config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    config = EasyDict(config)
 
-    solver = runner.DefaultRunner(train_data, val_data, model, optimizer, scheduler, tokenizer, gpus, config)
-    if config.train.resume_train:
-        solver.load(config.train.resume_checkpoint, epoch=config.train.resume_epoch, load_optimizer=True,
-                    load_scheduler=True)
-    solver.train()
+    if config.train.save and config.train.save_path is not None:
+        if not os.path.exists(config.train.save_path):
+            os.makedirs(config.train.save_path)
+    print(config)
 
+    spmd_main(options.local_world_size, options.local_rank, config)
 

@@ -1,7 +1,6 @@
 import os
 
 import pandas as pd
-import torch
 from torch.utils.data import Dataset
 from prottrans_models import get_tokenizer
 

@@ -1,5 +1,41 @@
 import warnings
 import torch
+import torch.distributed as dist
+
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self, name, device, fmt=':.2f'):
+        self.name = name
+        self.fmt = fmt
+        self.device = device
+        self.reset()
+
+    def reset(self):
+        self.val = 0.
+        self.avg = 0.
+        self.sum = 0.
+        self.count = 0.
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+    def all_reduce(self):
+        total = torch.tensor([self.sum, self.count], dtype=torch.float32, device=self.device)
+        dist.all_reduce(total, dist.ReduceOp.SUM, async_op=False)
+        self.sum, self.count = total.tolist()
+        self.avg = self.sum / self.count
+
+    def __str__(self):
+        fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
+        return fmtstr.format(**self.__dict__)
+
+    def summary(self, summary_type):
+        fmtstr = '{name} ' + summary_type + ' {' + summary_type + self.fmt + '}'
+        return fmtstr.format(**self.__dict__)
 
 
 def clip_norm(vec, limit, p=2):
