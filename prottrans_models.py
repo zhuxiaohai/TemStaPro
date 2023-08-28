@@ -9,14 +9,14 @@ import os
 import sys
 from hashlib import sha256
 
-def get_pretrained_model(model_path):
+def get_pretrained_model(model_path, device):
     """
     Fetches the model accordingly to the model_path
     model_path - STRING that identifies the model to fetch
     Returns model.
     """
 
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cuda:2' if torch.cuda.is_available() else 'cpu')
     if(os.path.exists(model_path+'/pytorch_model.bin') and 
         os.path.exists(model_path+'/config.json')):
         model = T5EncoderModel.from_pretrained(model_path+'/pytorch_model.bin', 
@@ -39,7 +39,7 @@ def get_tokenizer(model_path):
     tokenizer = T5Tokenizer.from_pretrained(model_path, do_lower_case=False)	
     return tokenizer
 
-def load_model_and_tokenizer(pt_dir, pt_server_path):
+def load_model_and_tokenizer(pt_dir, pt_server_path, device):
     """
     Load ProtTrans model and tokenizer.
     
@@ -54,10 +54,10 @@ def load_model_and_tokenizer(pt_dir, pt_server_path):
 
     if(os.path.isfile(f"{pt_dir}/pytorch_model.bin")):
         # Only loading the model
-        model = get_pretrained_model(pt_dir)
+        model = get_pretrained_model(pt_dir, device)
     else:
         # Downloading and saving the model
-        model = get_pretrained_model(pt_server_path)
+        model = get_pretrained_model(pt_server_path, device)
         model.save_pretrained(pt_dir)
 
     if(os.path.isfile(f"{pt_dir}/tokenizer_config.json")):
@@ -99,7 +99,8 @@ def process_FASTA(fasta_path, split_char="!", id_field=0):
 
     return (seqs, orig_seq_headers, orig_seqs)
 
-def get_embeddings(model, tokenizer, seqs, per_residue, per_protein, 
+def get_embeddings(model, tokenizer, seqs, per_residue, per_protein, device,
+                    train=False,
                     max_residues=4000, # number of cumulative residues per batch
                     max_seq_len=2000, # max length after which we switch to single-sequence processing to avoid OOM
                     max_batch=100 # max number of sequences per single batch
@@ -114,7 +115,7 @@ def get_embeddings(model, tokenizer, seqs, per_residue, per_protein,
     returns results depending on the option in the input.
     """
 
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cuda:2' if torch.cuda.is_available() else 'cpu')
 
     results = {'per_res_representations': dict(),
 		'mean_representations': dict()}
@@ -153,12 +154,18 @@ def get_embeddings(model, tokenizer, seqs, per_residue, per_protein,
                 s_len = seq_lens[batch_idx]
                 emb = embedding_repr.last_hidden_state[batch_idx,:s_len]
                 if per_residue:
-                    results["per_res_representations"][identifier] = \
-                        emb.detach().cpu().numpy().squeeze()
+                    if train:
+                        results["per_res_representations"][identifier] = emb.squeeze()
+                    else:
+                        results["per_res_representations"][identifier] = \
+                            emb.detach().cpu().numpy().squeeze()
                 if per_protein:
                     protein_emb = emb.mean(dim=0)
-                    results["mean_representations"][identifier] = \
-                        protein_emb.detach().cpu().numpy().squeeze()
+                    if train:
+                        results["per_res_representations"][identifier] = protein_emb.squeeze()
+                    else:
+                        results["mean_representations"][identifier] = \
+                            protein_emb.detach().cpu().numpy().squeeze()
 
     return results
 

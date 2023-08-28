@@ -5,7 +5,7 @@ Definition of the class of models with 2 hidden layers.
 from torch import nn
 
 class MLP_C2H2(nn.Module):
-    def __init__(self, input_size=None, hidden_size_1=None, hidden_size_2=None):
+    def __init__(self, input_size=None, hidden_size_1=None, hidden_size_2=None, activation=True):
         if(input_size == None):
             self.input_size = 1280
         else:
@@ -22,14 +22,23 @@ class MLP_C2H2(nn.Module):
             self.hidden_size_2 = int(hidden_size_2)
 
         super().__init__()
-        self.layers = nn.Sequential(
-            nn.Linear(self.input_size, self.hidden_size_1),
-            nn.ReLU(),
-            nn.Linear(self.hidden_size_1, self.hidden_size_2),
-            nn.ReLU(),
-            nn.Linear(self.hidden_size_2, 2),
-            nn.Sigmoid()
-        )
+        if activation:
+            self.layers = nn.Sequential(
+                nn.Linear(self.input_size, self.hidden_size_1),
+                nn.ReLU(),
+                nn.Linear(self.hidden_size_1, self.hidden_size_2),
+                nn.ReLU(),
+                nn.Linear(self.hidden_size_2, 2),
+                nn.Sigmoid()
+            )
+        else:
+            self.layers = nn.Sequential(
+                nn.Linear(self.input_size, self.hidden_size_1),
+                nn.ReLU(),
+                nn.Linear(self.hidden_size_1, self.hidden_size_2),
+                nn.ReLU(),
+                nn.Linear(self.hidden_size_2, 2),
+            )
 
     def forward(self, x):
         return self.layers(x)

@@ -1,0 +1,49 @@
+train:
+  batch_size: 32
+  seed: 2021
+  epochs: 100
+  shuffle: true
+  resume_train: false
+  eval: true
+  num_workers: 2
+  gpus:
+    - 2
+    - null
+    - null
+    - null
+  anneal_power: 2.0
+  data_path: /home/zhuxh/data/TemStaPro/train_kickup.csv
+  save: true
+  save_path: /home/zhuxh/TemStaPro_train
+  resume_checkpoint: null
+  resume_epoch: null
+  log_interval: 400
+  optimizer:
+    type: Adam
+    lr: 0.001
+    weight_decay: 0.000
+    dropout: 0.0
+  scheduler:
+    type: plateau
+    factor: 0.6
+    # factor: 0.95
+    patience: 10
+    min_lr: 1e-4
+
+
+test:
+  init_checkpoint: /home/zhuxh/TemStatPro_train
+  data_path: /home/zhuxh/data/TemStaPro/val_kickup.csv
+  output_path: /home/zhuxh/TemStaPro_test
+  epoch: 100
+  gen:
+    dg_step_size: 3.0
+    dg_num_steps: 1000
+    steps_d: 100
+    step_lr_d: 0.000002
+    steps_pos: 100
+    step_lr_pos: 0.0000024
+    clip: 1000
+    min_sigma: 0.0
+    verbose: 1
+

@@ -23,7 +23,7 @@ PARAMETERS = {
     "SEEDS": ["41", "42", "43", "44", "45"],
     "INPUT_SIZE": 1024,
     "HIDDEN_LAYER_SIZES": [512, 256],
-    "DEVICE": torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
+    "DEVICE": torch.device("cuda:2" if torch.cuda.is_available() else "cpu"),
     "THRESHOLDS_RANGE": ":(40-65]:",
     "TEMPERATURE_RANGES": {
         ":(40-65]:": ["<40", "[40-45)", "[45-50)", "[50-55)", "[55-60)", 
@@ -46,14 +46,14 @@ PARAMETERS = {
 parser = OptionParser()
 
 parser.add_option("--input-fasta", "-f", dest="fasta",
-    default=None, help="path to the input FASTA file.")
+    default='./tests/data/multiple_short_sequences.fasta', help="path to the input FASTA file.")
 
 parser.add_option("--embeddings-dir", "-e", dest="emb_dir",
-    default=None, help="path to the directory to which embeddings "+\
+    default='tests/outputs/', help="path to the directory to which embeddings "+\
     "files will be saved (cache).")
 
 parser.add_option("--PT-directory", "-d", dest="pt_dir",
-    default=None, help="path to the directory of ProtTrans model.")
+    default='./ProtTrans/', help="path to the directory of ProtTrans model.")
 
 parser.add_option("--temstapro-directory", "-t", dest="tsp_dir",
     default='./', help="path to the directory of TemStaPro program "+\
@@ -65,7 +65,7 @@ parser.add_option("--more-thresholds", dest="more_thresholds",
     "thremophilicity label")
 
 parser.add_option("--mean-output", dest="mean_out",
-    default=None, help="path to the output TSV file with mean predictions. "+\
+    default='./long_sequence_predictions.tsv', help="path to the output TSV file with mean predictions. "+\
     "Predictions made from the mean embeddings are always printed to STDOUT."+\
     " If this option is given, the output is directed to the given file")
 
@@ -149,7 +149,7 @@ import results
 print("%s: beginning to load the model " % datetime.now(), file=sys.stderr)
 
 pt_model, tokenizer = prottrans_models.load_model_and_tokenizer(options.pt_dir, 
-    PARAMETERS["PT_MODEL_PATH"])
+    PARAMETERS["PT_MODEL_PATH"], PARAMETERS["DEVICE"])
 
 print("%s: finished loading the model" % datetime.now(), file=sys.stderr)
 
@@ -185,7 +185,8 @@ for i in range(0, len(list(sequences.keys())), options.portion_size):
         embeddings = prottrans_models.get_embeddings(pt_model, tokenizer, 
             seqs_wo_emb_portion, 
             per_residue=per_res_mode, 
-            per_protein=True)
+            per_protein=True,
+            device=PARAMETERS["DEVICE"])
 
         gen_emb_end = datetime.now()
         
