@@ -166,6 +166,8 @@ if __name__ == '__main__':
     if config.train.save and config.train.save_path is not None:
         if not os.path.exists(config.train.save_path):
             os.makedirs(config.train.save_path)
+    if not os.path.exists(config.train.log_dir):
+        os.makedirs(config.train.log_dir)
 
     # check device
     gpus = list(filter(lambda x: x is not None, config.train.gpus))
@@ -199,7 +201,7 @@ if __name__ == '__main__':
 
     solver = runner.DefaultRunner(train_data, val_data, model, optimizer, scheduler, tokenizer, gpus, config)
     if config.train.resume_train:
-        solver.load(config.train.resume_checkpoint, epoch=config.train.resume_epoch, load_optimizer=True,
+        solver.load(config.train.resume_checkpoint, load_optimizer=True,
                     load_scheduler=True)
     solver.train()
 

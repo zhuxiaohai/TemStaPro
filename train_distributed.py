@@ -18,6 +18,7 @@ import models
 from prottrans_models import get_tokenizer
 
 
+
 PARAMETERS = {
     "PT_MODEL_PATH": "Rostlab/prot_t5_xl_half_uniref50-enc",
     "DATASET": "major",
@@ -174,38 +175,24 @@ def worker(local_rank, local_world_size, config):
         + f"world_size = {dist.get_world_size()}, local_world_size = {local_world_size}, devices_num = {n}, device_ids = {device_ids}"
     )
 
-    load_path = os.path.join(config.data.base_path, '%s_processed' % config.data.dataset)
-    print('loading data from %s' % load_path)
-
-    train_data = []
-    val_data = []
-    test_data = []
-
-    if config.data.train_set is not None:
-        with open(os.path.join(load_path, config.data.train_set), "rb") as fin:
-            train_data = pickle.load(fin)
-    if config.data.val_set is not None:
-        with open(os.path.join(load_path, config.data.val_set), "rb") as fin:
-            val_data = pickle.load(fin)
-    print('train size : %d  ||  val size: %d  ||  test size: %d ' % (len(train_data), len(val_data), len(test_data)))
-    print('loading data done!')
-
     train_data = TemStaProData(config.train.data_path, options.pt_dir, PARAMETERS['PT_MODEL_PATH'])
     val_data = TemStaProData(config.test.data_path, options.pt_dir, PARAMETERS['PT_MODEL_PATH'])
+    print('train size : %d  ||  val size: %d ' % (len(train_data), len(val_data)))
+    print('loading data done!')
 
     model = models.TemStaProModel(PARAMETERS, options)
 
     optimizer = utils.get_optimizer(config.train.optimizer, model)
     scheduler = utils.get_scheduler(config.train.scheduler, optimizer)
 
-    solver = runner.DefaultRunner(train_data, val_data, test_data, model, optimizer, scheduler, device_ids, config, True)
+    solver = runner.DefaultRunner(train_data, val_data,  model, optimizer, scheduler, tokenizer, device_ids, config, True)
     if config.train.resume_train:
         # Use a barrier() to make sure that process 1 loads the model after process
         # 0 saves it.
         dist.barrier()
         # configure map_location properly
         map_location = {'cuda:%d' % 0: 'cuda:%d' % device_ids[0]}
-        solver.load(config.train.resume_checkpoint, epoch=config.train.resume_epoch, load_optimizer=True,
+        solver.load(config.train.resume_checkpoint, load_optimizer=True,
                     load_scheduler=True, map_location=map_location)
     solver.train()
 
@@ -242,6 +229,8 @@ if __name__ == '__main__':
     if config.train.save and config.train.save_path is not None:
         if not os.path.exists(config.train.save_path):
             os.makedirs(config.train.save_path)
+    if not os.path.exists(config.train.log_dir):
+        os.makedirs(config.train.log_dir)
     print(config)
 
     spmd_main(options.local_world_size, options.local_rank, config)

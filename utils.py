@@ -3,6 +3,23 @@ import torch
 import torch.distributed as dist
 
 
+def accuracy(output, target, topk=(1,)):
+    """Computes the accuracy over the k top predictions for the specified values of k"""
+    with torch.no_grad():
+        maxk = max(topk)
+        batch_size = target.size(0)
+
+        _, pred = output.topk(maxk, 1, True, True)
+        pred = pred.t()
+        correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+        res = []
+        for k in topk:
+            correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
+            res.append(correct_k.mul_(100.0 / batch_size))
+        return res
+
+
 class AverageMeter(object):
     """Computes and stores the average and current value"""
     def __init__(self, name, device, fmt=':.2f'):
@@ -90,4 +107,4 @@ def get_scheduler(config, optimizer):
             min_lr=config.min_lr,
         )
     else:
-        raise NotImplementedError('Scheduler not supported: %s' % config.type)
+        return None

@@ -7,17 +7,16 @@ train:
   eval: true
   num_workers: 2
   gpus:
+    - 1
     - 2
-    - null
-    - null
-    - null
   anneal_power: 2.0
   data_path: /home/zhuxh/data/TemStaPro/train_kickup.csv
   save: true
   save_path: /home/zhuxh/TemStaPro_train
   resume_checkpoint: null
   resume_epoch: null
-  log_interval: 400
+  log_interval: 20
+  log_dir: /home/zhuxh/TemStaPro_log
   optimizer:
     type: Adam
     lr: 0.001
