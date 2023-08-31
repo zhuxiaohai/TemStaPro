@@ -32,7 +32,15 @@ class TemStaProModel(torch.nn.Module):
         self.classifier = MLP_C2H2(parameters["INPUT_SIZE"],
                                    parameters["HIDDEN_LAYER_SIZES"][0],
                                    parameters["HIDDEN_LAYER_SIZES"][1],
-                                   activation=False)
+                                   activation=parameters["ACTIVATION"])
+
+        if parameters["LOAD_PRETRAINED_CLASSIFIER"]:
+            model_path = "%s/%s_%s_%s-%s_s%s.pt" % (
+                parameters["CLASSIFIERS_DIR"], parameters["EMB_TYPE"],
+                parameters["DATASET"], parameters["CLASSIFIER_TYPE"],
+                parameters["THRESHOLD"], parameters['SEED'])
+            self.classifier.load_state_dict(torch.load(model_path))
+            print('loading pretrained classifier: done')
 
     def get_pretrained_model(self, model_path):
         if (os.path.exists(model_path + '/pytorch_model.bin') and

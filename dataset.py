@@ -32,7 +32,7 @@ class TemStaProData(Dataset):
         #                                             return_tensors='pt')
         # return label, {'pdb_id': pdb_id, 'input_idx': token_encoding['input_ids'].squeeze(0),
         #                'attention_mask': token_encoding['attention_mask'].squeeze(0)}
-        return self.label[idx], ' '.join(list(self.input_data[idx]))
+        return self.label[idx], self.pdb_ids[idx], ' '.join(list(self.input_data[idx]))
 
     def load_tokenizer(self):
         """

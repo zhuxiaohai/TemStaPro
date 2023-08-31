@@ -21,6 +21,10 @@ from prottrans_models import get_tokenizer
 
 PARAMETERS = {
     "PT_MODEL_PATH": "Rostlab/prot_t5_xl_half_uniref50-enc",
+    "ACTIVATION": False,
+    "LOAD_PRETRAINED_CLASSIFIER": False,
+    "THRESHOLD": "40",
+    "SEED": "41",
     "DATASET": "major",
     "EMB_TYPE": "mean",
     "CLASSIFIER_TYPE": "imbal",
