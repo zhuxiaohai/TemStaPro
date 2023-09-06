@@ -1,7 +1,6 @@
 # coding: utf-8
 import numpy as np
 import random
-import pickle
 import yaml
 from easydict import EasyDict
 from optparse import OptionParser
@@ -10,20 +9,19 @@ import os
 
 import torch
 import torch.distributed as dist
+from transformers import AutoTokenizer
 
 from dataset import TemStaProData
 import runner
 import utils
 import models
-from prottrans_models import get_tokenizer
-
 
 
 PARAMETERS = {
     "PT_MODEL_PATH": "Rostlab/prot_t5_xl_half_uniref50-enc",
     "ACTIVATION": False,
     "LOAD_PRETRAINED_CLASSIFIER": False,
-    "THRESHOLD": "40",
+    "THRESHOLD": "65",
     "SEED": "41",
     "DATASET": "major",
     "EMB_TYPE": "mean",
@@ -33,7 +31,7 @@ PARAMETERS = {
         ":(40-80]:": ["40", "45", "50", "55", "60", "65", "70", "75", "80"],
     },
     "SEEDS": ["41", "42", "43", "44", "45"],
-    "INPUT_SIZE": 1024,
+    "INPUT_SIZE": 640,
     "HIDDEN_LAYER_SIZES": [512, 256],
     "THRESHOLDS_RANGE": ":(40-65]:",
     "TEMPERATURE_RANGES": {
@@ -67,7 +65,8 @@ parser.add_option("--embeddings-dir", "-e", dest="emb_dir",
     "files will be saved (cache).")
 
 parser.add_option("--PT-directory", "-d", dest="pt_dir",
-    default='./ProtTrans/', help="path to the directory of ProtTrans model.")
+    default='/home/zhuxh/.cache/huggingface/hub/models--facebook--esm2_t30_150M_UR50D/snapshots/a695f6045e2e32885fa60af20c13cb35398ce30c',
+                  help="path to the directory of ProtTrans model.")
 
 parser.add_option("--temstapro-directory", "-t", dest="tsp_dir",
     default='./', help="path to the directory of TemStaPro program "+\
@@ -154,16 +153,7 @@ PARAMETERS["CLASSIFIERS_DIR"] = f"{options.tsp_dir}/models"
 
 per_res_mode = (options.per_res_out or options.per_segment_out)
 
-if (not os.path.exists(f"{options.pt_dir}/")):
-    os.system(f"mkdir -p {options.pt_dir}/")
-
-if (os.path.isfile(f"{options.pt_dir}/tokenizer_config.json")):
-    # Only loading the tokenizer
-    tokenizer = get_tokenizer(options.pt_dir)
-else:
-    # Downloading and saving the tokenizer
-    tokenizer = get_tokenizer(PARAMETERS['PT_MODEL_PATH'])
-    tokenizer.save_pretrained(options.pt_dir)
+tokenizer = AutoTokenizer.from_pretrained(options.pt_dir)
 
 
 def worker(local_rank, local_world_size, config):
@@ -184,7 +174,7 @@ def worker(local_rank, local_world_size, config):
     print('train size : %d  ||  val size: %d ' % (len(train_data), len(val_data)))
     print('loading data done!')
 
-    model = models.TemStaProModel(PARAMETERS, options)
+    model = models.ESMBaseModel(PARAMETERS, options)
 
     optimizer = utils.get_optimizer(config.train.optimizer, model)
     scheduler = utils.get_scheduler(config.train.scheduler, optimizer)

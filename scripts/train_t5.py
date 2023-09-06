@@ -150,16 +150,7 @@ PARAMETERS["CLASSIFIERS_DIR"] = f"{options.tsp_dir}/models"
 
 per_res_mode = (options.per_res_out or options.per_segment_out)
 
-if (not os.path.exists(f"{options.pt_dir}/")):
-    os.system(f"mkdir -p {options.pt_dir}/")
-
-if (os.path.isfile(f"{options.pt_dir}/tokenizer_config.json")):
-    # Only loading the tokenizer
-    tokenizer = get_tokenizer(options.pt_dir)
-else:
-    # Downloading and saving the tokenizer
-    tokenizer = get_tokenizer(PARAMETERS['PT_MODEL_PATH'])
-    tokenizer.save_pretrained(options.pt_dir)
+tokenizer = get_tokenizer(options.pt_dir)
 
 
 if __name__ == '__main__':
@@ -199,7 +190,7 @@ if __name__ == '__main__':
     print('train size : %d  ||  val size: %d ' % (len(train_data), len(val_data)))
     print('loading data done!')
 
-    model = models.TemStaProModel(PARAMETERS, options)
+    model = models.T5BaseModel(PARAMETERS, options)
     optimizer = utils.get_optimizer(config.train.optimizer, model)
     scheduler = utils.get_scheduler(config.train.scheduler, optimizer)
 

@@ -84,7 +84,10 @@ class DefaultRunner(object):
         state = torch.load(checkpoint, map_location=self.device if map_location is None else map_location)
         self._model.load_state_dict(state["model"])
         # self._model.load_state_dict(state["model"], strict=False)
-        self.best_loss = state.get('best_loss', state['cur_loss'])
+        try:
+            self.best_loss = state['best_loss']
+        except:
+            self.best_loss = state['cur_loss']
         self.epoch = state['cur_epoch']
         self.step = state['cur_step']
 

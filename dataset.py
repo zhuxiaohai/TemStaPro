@@ -15,7 +15,7 @@ class TemStaProData(Dataset):
         self.df[self.label] = self.df[self.label].astype(int)
         self.pt_dir = pt_dir
         self.pt_server_path = pt_server_path
-        self.load_tokenizer()
+        # self.load_tokenizer()
         self.pdb_ids = self.df[self.pdb_id].tolist()
         self.label = self.df[self.label].tolist()
         self.input_data = self.df['sequence'].tolist()
@@ -34,27 +34,27 @@ class TemStaProData(Dataset):
         #                'attention_mask': token_encoding['attention_mask'].squeeze(0)}
         return self.label[idx], self.pdb_ids[idx], ' '.join(list(self.input_data[idx]))
 
-    def load_tokenizer(self):
-        """
-        Load ProtTrans model and tokenizer.
-
-        pt_dir - STRING to determine the path to the directory with ProtTrans
-            "pytorch_model.bin" file
-        pt_server_path - STRING of the path to ProtTrans model in its server
-
-        returns (ProtT5-XL model, tokenizer)
-        """
-        if (not os.path.exists(f"{self.pt_dir}/")):
-            os.system(f"mkdir -p {self.pt_dir}/")
-
-        if (os.path.isfile(f"{self.pt_dir}/tokenizer_config.json")):
-            # Only loading the tokenizer
-            tokenizer = get_tokenizer(self.pt_dir)
-        else:
-            # Downloading and saving the tokenizer
-            tokenizer = get_tokenizer(self.pt_server_path)
-            tokenizer.save_pretrained(self.pt_dir)
-
-        self.tokenizer = tokenizer
+    # def load_tokenizer(self):
+    #     """
+    #     Load ProtTrans model and tokenizer.
+    #
+    #     pt_dir - STRING to determine the path to the directory with ProtTrans
+    #         "pytorch_model.bin" file
+    #     pt_server_path - STRING of the path to ProtTrans model in its server
+    #
+    #     returns (ProtT5-XL model, tokenizer)
+    #     """
+    #     if (not os.path.exists(f"{self.pt_dir}/")):
+    #         os.system(f"mkdir -p {self.pt_dir}/")
+    #
+    #     if (os.path.isfile(f"{self.pt_dir}/tokenizer_config.json")):
+    #         # Only loading the tokenizer
+    #         tokenizer = get_tokenizer(self.pt_dir)
+    #     else:
+    #         # Downloading and saving the tokenizer
+    #         tokenizer = get_tokenizer(self.pt_server_path)
+    #         tokenizer.save_pretrained(self.pt_dir)
+    #
+    #     self.tokenizer = tokenizer
 
 
