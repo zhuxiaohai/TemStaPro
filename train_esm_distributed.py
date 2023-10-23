@@ -19,10 +19,12 @@ import models
 
 PARAMETERS = {
     "PT_MODEL_PATH": "Rostlab/prot_t5_xl_half_uniref50-enc",
-    "ACTIVATION": False,
+    "ACTIVATION": True,
     "LOAD_PRETRAINED_CLASSIFIER": False,
     "THRESHOLD": "65",
     "SEED": "41",
+    "ONLY_EMBEDDINGS": True,
+    "IDENTIFIER": 'sfsfs',
     "DATASET": "major",
     "EMB_TYPE": "mean",
     "CLASSIFIER_TYPE": "imbal",
@@ -188,7 +190,7 @@ def worker(local_rank, local_world_size, config):
         map_location = {'cuda:%d' % 0: 'cuda:%d' % device_ids[0]}
         solver.load(config.train.resume_checkpoint, load_optimizer=True,
                     load_scheduler=True, map_location=map_location)
-    solver.train()
+    solver.predict_async('val', 'sfsfs')
 
 
 def spmd_main(local_world_size, local_rank, config):

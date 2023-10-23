@@ -11,13 +11,14 @@ train:
     - 1
     - 2
   anneal_power: 2.0
-  data_path: /home/zhuxh/data/TemStaPro/train_kickup.csv
+  data_path: /home/zhuxh/data/TemStaPro/val_kickup_small.csv
   save: true
   save_path: /home/zhuxh/TemStaPro_train
   resume_checkpoint: /home/zhuxh/TemStaPro_train/2023-08-29-17-10-24-train30000/best_train_checkpoint.pt
   resume_epoch: null
   log_interval: 400
   log_dir: /home/zhuxh/TemStaPro_log
+  identifier: sfsf
   optimizer:
     type: Adam
     lr: 0.001
@@ -36,6 +37,7 @@ test:
   data_path: /home/zhuxh/data/TemStaPro/val_kickup_small.csv
   output_path: /home/zhuxh/TemStaPro_test
   epoch: 1
+  identifier: sfsf
   gen:
     dg_step_size: 3.0
     dg_num_steps: 1000

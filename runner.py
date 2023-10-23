@@ -5,6 +5,7 @@ from tqdm import tqdm
 from collections import defaultdict
 
 import numpy as np
+import pandas as pd
 
 import torch
 from torch.utils.data import DataLoader
@@ -47,7 +48,7 @@ class DefaultRunner(object):
         # create directories from master rank only
         dist_utils.broadcast(timestamp, 0)
         timestamp = datetime.datetime.fromtimestamp(timestamp.float().item()).strftime("%Y-%m-%d-%H-%M-%S")
-        self.timestamp_id = timestamp
+        self.timestamp_id = timestamp + '-' + self.config.train.identifier
         self.logs_dir = os.path.join(self.config.train.log_dir, self.timestamp_id)
         self.results_dir = os.path.join(self.config.test.output_path, self.timestamp_id)
         self.checkpoints_dir = os.path.join(self.config.train.save_path, self.timestamp_id)
@@ -64,19 +65,22 @@ class DefaultRunner(object):
         token_encoding = self._tokenizer.batch_encode_plus([i[-1] for i in batch],
                                                            add_special_tokens=True,
                                                            padding='longest',
-                                                           return_tensors='pt')
+                                                           return_tensors='pt',
+                                                           truncation=True,
+                                                           max_length=1000)
         return torch.tensor([i[0] for i in batch]), [str(i[1]) for i in batch], token_encoding
 
     def save(self, filename, var_list={}):
-        state = {
-            **var_list,
-            "model": self._model.state_dict(),
-            "optimizer": self._optimizer.state_dict(),
-            "scheduler": self._scheduler.state_dict(),
-            "config": self.config
-        }
-        checkpoint = os.path.join(self.checkpoints_dir, filename)
-        torch.save(state, checkpoint)
+        if dist_utils.is_master():
+            state = {
+                **var_list,
+                "model": self._model.state_dict(),
+                "optimizer": self._optimizer.state_dict(),
+                "scheduler": self._scheduler.state_dict(),
+                "config": self.config
+            }
+            checkpoint = os.path.join(self.checkpoints_dir, filename)
+            torch.save(state, checkpoint)
 
     def load(self, checkpoint, load_optimizer=False, load_scheduler=False, map_location=None):
         print("Load checkpoint from %s" % checkpoint)
@@ -158,6 +162,74 @@ class DefaultRunner(object):
 
             print(f"Writing results to {full_path}")
             np.savez_compressed(full_path, **gather_results)
+
+    @torch.no_grad()
+    def predict_async(self, split, results_file, disable_tqdm: bool = False):
+        def run_predict(dataloader):
+            for _, (_, pdb_ids, batch) in tqdm(
+                    enumerate(dataloader),
+                    total=len(dataloader),
+                    position=rank,
+                    desc="rank {}".format(rank),
+                    disable=disable_tqdm,
+            ):
+                if self.distributed or self.device.type == "cuda":
+                    if not self.distributed:
+                        batch['input_ids'] = batch['input_ids'].to(self.device)
+                        batch['attention_mask'] = batch['attention_mask'].to(self.device)
+                    else:
+                        batch['input_ids'] = batch['input_ids'].cuda(self.device, non_blocking=True)
+                        batch['attention_mask'] = batch['attention_mask'].cuda(self.device, non_blocking=True)
+
+                out = model(batch)
+                predictions["id"].extend(
+                    pdb_ids
+                )
+                predictions["res"].extend(
+                    out.cpu().detach().numpy()
+                )
+
+        if split not in ['train', 'val', 'test']:
+            raise ValueError('split should be either train, val, or test.')
+
+        test_set = getattr(self, "%s_set" % split)
+        if self.distributed:
+            test_sampler = DistributedSampler(test_set, shuffle=False, drop_last=True)
+            pin_memory = True
+        else:
+            test_sampler = None
+            pin_memory = False
+        dataloader = DataLoader(test_set, batch_size=self.batch_size,
+                                shuffle=False, num_workers=self.config.train.num_workers,
+                                pin_memory=pin_memory, sampler=test_sampler, collate_fn=self.collate_fn)
+        model = self._model
+        model.eval()
+        rank = dist_utils.get_rank()
+
+        predictions = {"id": [], "res": []}
+
+        # code here
+        run_predict(dataloader)
+
+        if self.distributed and (len(dataloader.sampler) * dist.get_world_size() < len(dataloader.dataset)) and \
+                dist_utils.is_master():
+            aux_val_dataset = Subset(dataloader.dataset,
+                                     range(len(dataloader.sampler) * dist.get_world_size(),
+                                           len(dataloader.dataset)))
+            aux_val_loader = DataLoader(
+                aux_val_dataset, batch_size=self.batch_size, shuffle=False,
+                num_workers=self.config.train.num_workers, pin_memory=pin_memory, collate_fn=self.collate_fn)
+            run_predict(aux_val_loader)
+
+        results_file_path = os.path.join(
+            self.results_dir,
+            f"{results_file}_{rank}.csv",
+        )
+        df_ids = pd.DataFrame(predictions['id'], columns=['ids'])
+        df_res = pd.DataFrame(predictions['res'],
+                              columns=[results_file + '_' + str(i) for i in range(predictions['res'][0].shape[0])])
+        pd.concat([df_ids, df_res], axis=1).to_csv(results_file_path, index=None)
+        print(f"Writing results to {results_file_path}")
 
     @torch.no_grad()
     def predict(
@@ -341,7 +413,7 @@ class DefaultRunner(object):
 
                 batch_cnt += 1
                 self.epoch = epoch + (i + 1) / size_of_loader
-                self.step = start_epoch * len(dataloader) + i + 1
+                self.step = epoch * size_of_loader + i + 1
 
                 if self.distributed or self.device.type == 'cuda':
                     if not self.distributed:
@@ -409,14 +481,17 @@ class DefaultRunner(object):
                                 }
                                 self.save('best_checkpoint.pt', val_list)
 
+                    losses_meter.reset()
+                    top1_meter.reset()
+
                 if self.config.train.scheduler.type == "plateau":
                     if (batch_cnt % self.config.train.log_interval == 0) and self.config.train.eval and self.config.train.eval_step:
                         self._scheduler.step(average_eval_loss)
                 elif self._scheduler is not None:
                     self._scheduler.step()
 
-                losses_meter.reset()
-                top1_meter.reset()
+                # losses_meter.reset()
+                # top1_meter.reset()
 
             if verbose:
                 if (not self.distributed) or (self.distributed and (self.device == 0)):

@@ -10,7 +10,7 @@ class TemStaProData(Dataset):
         super(TemStaProData).__init__()
         self.label = label
         self.pdb_id = pdb_id
-        self.df = pd.read_csv(csv_path, encoding='utf8', sep=',')
+        self.df = pd.read_csv(csv_path, encoding='utf8', sep=',')[:-1]
         self.max_length = self.df['sequence'].str.len().max() + 1
         self.df[self.label] = self.df[self.label].astype(int)
         self.pt_dir = pt_dir

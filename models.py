@@ -66,10 +66,12 @@ class TemStaProModel(torch.nn.Module):
         #         input_data = torch.vstack((input_data, torch.flatten(embedding)))
         #     else:
         #         input_data = torch.reshape(embedding, (1, self.config["INPUT_SIZE"]))
-
         # Generating outputs
-        outputs = self.classifier(embeddings)
-        return outputs
+        if self.config["ONLY_EMBEDDINGS"]:
+            return embeddings
+        else:
+            outputs = self.classifier(embeddings)
+            return outputs
 
     def train(self, mode: bool = True):
         super(TemStaProModel, self).train(mode)
